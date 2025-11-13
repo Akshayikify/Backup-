@@ -3,6 +3,10 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './context/AuthContext';
 import Home from './pages/Home';
 import Login from './components/Login';
+import UserLogin from './components/UserLogin';
+import UserRegister from './components/UserRegister';
+import VerifierLogin from './components/VerifierLogin';
+import VerifierRegister from './components/VerifierRegister';
 import Dashboard from './pages/Dashboard';
 import UserDashboard from './pages/UserDashboard';
 import VerifierDashboard from './pages/VerifierDashboard';
@@ -19,6 +23,10 @@ function App() {
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/user-login" element={<UserLogin />} />
+            <Route path="/user-register" element={<UserRegister />} />
+            <Route path="/verifier-login" element={<VerifierLogin />} />
+            <Route path="/verifier-register" element={<VerifierRegister />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/user-dashboard" element={<UserDashboard />} />
             <Route path="/verifier-dashboard" element={<VerifierDashboard />} />

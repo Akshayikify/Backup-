@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import WalletConnect from '../components/WalletConnect';
 import UploadFile from '../components/UploadFile';
 import CredentialCard from '../components/CredentialCard';
+import BlockchainUsers from '../components/BlockchainUsers';
 import { 
   ShieldCheckIcon,
   DocumentPlusIcon,
@@ -15,7 +16,7 @@ import {
 import toast from 'react-hot-toast';
 
 function UserDashboard() {
-  const { userRole, walletAddress, logout, updateWallet } = useAuth();
+  const { userRole, walletAddress, logout, updateWallet, loading, userData } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [stats, setStats] = useState({
     totalDocuments: 0,
@@ -51,8 +52,8 @@ function UserDashboard() {
 
   useEffect(() => {
     // Redirect if not logged in as user
-    if (!userRole || userRole !== 'user') {
-      navigate('/login');
+    if (!loading && (!userRole || userRole !== 'user')) {
+      navigate('/user-login');
       return;
     }
 
@@ -60,7 +61,7 @@ function UserDashboard() {
     if (walletAddress) {
       loadUserData();
     }
-  }, [userRole, walletAddress, navigate, loadUserData]);
+  }, [userRole, walletAddress, navigate, loadUserData, loading]);
 
   const handleWalletConnected = (account) => {
     updateWallet(account);
@@ -118,6 +119,17 @@ function UserDashboard() {
     navigate('/login');
     toast.success('Logged out successfully');
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!walletAddress) {
     return (
@@ -280,6 +292,11 @@ function UserDashboard() {
             </button>
           </div>
         )}
+
+        {/* Blockchain Users Section */}
+        <div className="mt-8">
+          <BlockchainUsers currentUserWallet={walletAddress} />
+        </div>
       </main>
     </div>
   );

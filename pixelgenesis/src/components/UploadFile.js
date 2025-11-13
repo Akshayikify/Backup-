@@ -103,8 +103,14 @@ function UploadFile({ account, onFileUploaded }) {
       const fileInput = document.getElementById('file-input');
       if (fileInput) fileInput.value = '';
       
+      // Extract data from response (backend returns { status: 'success', data: {...} })
+      const responseData = response.data || response;
+      
       // Ensure unique CID is generated and tracked
-      const uniqueCID = response.ipfs_url || response.cid || `Qm${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+      const uniqueCID = responseData.ipfs_url || responseData.cid || responseData.ipfsHash || `Qm${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+      
+      // Get transaction hash from response
+      const txHash = responseData.tx_hash || responseData.txHash;
       
       if (onFileUploaded) {
         onFileUploaded({
@@ -112,16 +118,31 @@ function UploadFile({ account, onFileUploaded }) {
           ...metadata,
           ipfsHash: uniqueCID,
           cid: uniqueCID, // Store CID explicitly
-          ipfsUrl: response.ipfs_url || `https://gateway.pinata.cloud/ipfs/${uniqueCID}`,
-          txHash: response.tx_hash,
-          blockchainHash: response.tx_hash,
+          ipfsUrl: responseData.ipfs_url || responseData.gatewayUrl || `https://gateway.pinata.cloud/ipfs/${uniqueCID}`,
+          txHash: txHash,
+          blockchainHash: txHash,
+          credentialId: responseData.credentialId,
+          blockchainStored: responseData.blockchainStored || false,
           uploadedAt: new Date().toISOString()
         });
       }
       
     } catch (error) {
       console.error('Error uploading document:', error);
-      toast.error(error.message || 'Failed to upload document', { id: 'upload' });
+      
+      // Check if error is related to IPFS configuration
+      const errorMessage = error.message || 'Failed to upload document';
+      if (errorMessage.includes('Pinata') || errorMessage.includes('IPFS upload failed')) {
+        toast.error(
+          'IPFS not configured. Please configure Pinata API keys in backend .env file. See IPFS_SETUP.md for instructions.',
+          { 
+            id: 'upload',
+            duration: 8000 
+          }
+        );
+      } else {
+        toast.error(errorMessage, { id: 'upload' });
+      }
     } finally {
       setIsUploading(false);
     }

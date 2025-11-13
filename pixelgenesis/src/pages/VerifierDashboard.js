@@ -14,14 +14,14 @@ import {
 import toast from 'react-hot-toast';
 
 function VerifierDashboard() {
-  const { userRole, logout } = useAuth();
+  const { userRole, logout, loading } = useAuth();
   const [verificationHistory, setVerificationHistory] = useState([]);
   const navigate = useNavigate();
 
   useEffect(() => {
     // Redirect if not logged in as verifier
-    if (!userRole || userRole !== 'verifier') {
-      navigate('/login');
+    if (!loading && (!userRole || userRole !== 'verifier')) {
+      navigate('/verifier-login');
       return;
     }
 
@@ -30,7 +30,7 @@ function VerifierDashboard() {
     if (savedHistory) {
       setVerificationHistory(JSON.parse(savedHistory));
     }
-  }, [userRole, navigate]);
+  }, [userRole, navigate, loading]);
 
   const handleVerification = (verificationResult) => {
     const newVerification = {
@@ -52,9 +52,20 @@ function VerifierDashboard() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/verifier-login');
     toast.success('Logged out successfully');
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">

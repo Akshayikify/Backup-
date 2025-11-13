@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 import WalletConnect from '../components/WalletConnect';
 import CreateDID from '../components/CreateDID';
+import BlockchainUsers from '../components/BlockchainUsers';
 import { 
   ShieldCheckIcon,
   DocumentPlusIcon,
@@ -12,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 function Dashboard() {
+  const { userData, walletAddress } = useAuth();
   const [connectedAccount, setConnectedAccount] = useState('');
   const [userDID, setUserDID] = useState(null);
   const [stats, setStats] = useState({
@@ -20,6 +23,24 @@ function Dashboard() {
     recentActivity: []
   });
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Check if user already has a DID from their userData
+    if (userData && userData.did) {
+      setUserDID({
+        did: userData.did,
+        didId: userData.didId,
+        name: userData.username || 'User',
+        metadataHash: userData.metadataHash,
+        txHash: userData.txHash
+      });
+    }
+    
+    // Set connected account from auth context if available
+    if (walletAddress) {
+      setConnectedAccount(walletAddress);
+    }
+  }, [userData, walletAddress]);
 
   useEffect(() => {
     // Load user data when account changes
@@ -204,11 +225,16 @@ function Dashboard() {
                     <span className="font-medium">DID Created Successfully</span>
                   </div>
                   <p className="text-green-700 text-sm mb-2">
-                    <strong>Name:</strong> {userDID.name}
+                    <strong>Name:</strong> {userDID.name || 'User'}
                   </p>
-                  <p className="text-green-700 text-sm">
-                    <strong>DID ID:</strong> {userDID.didId}
+                  <p className="text-green-700 text-sm mb-2">
+                    <strong>DID:</strong> {userDID.did || 'N/A'}
                   </p>
+                  {userDID.didId && (
+                    <p className="text-green-700 text-sm">
+                      <strong>DID ID:</strong> {userDID.didId}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -302,6 +328,11 @@ function Dashboard() {
               </button>
             </div>
           </div>
+        </div>
+
+        {/* Blockchain Users Section */}
+        <div className="mt-8">
+          <BlockchainUsers currentUserWallet={connectedAccount} />
         </div>
       </main>
     </div>

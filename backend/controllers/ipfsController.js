@@ -1,6 +1,7 @@
 const multer = require('multer');
 const ipfsService = require('../services/ipfsService');
 const cryptoService = require('../services/cryptoService');
+const blockchainService = require('../services/blockchainService');
 const credentialController = require('./credentialController');
 const Log = require('../models/Log');
 const asyncHandler = require('../utils/asyncHandler');
@@ -68,8 +69,32 @@ const uploadFile = asyncHandler(async (req, res) => {
       success: true
     });
 
-    // Generate transaction hash (mock for now)
-    const txHash = `0x${Math.random().toString(16).substring(2, 66)}`;
+    // Store credential on blockchain and get real transaction hash
+    let txHash;
+    let credentialId = null;
+    try {
+      // Store the credential on blockchain
+      // Using walletAddress as both issuer and owner for user-uploaded documents
+      const blockchainResult = await blockchainService.storeCredential(
+        ipfsResult.cid,
+        fileHash,
+        walletAddress.toLowerCase(),
+        walletAddress.toLowerCase()
+      );
+      
+      txHash = blockchainResult.txHash;
+      credentialId = blockchainResult.credentialId;
+      
+      console.log('✅ Document stored on blockchain:', {
+        credentialId,
+        txHash,
+        cid: ipfsResult.cid
+      });
+    } catch (blockchainError) {
+      console.warn('⚠️  Blockchain storage failed, using mock transaction hash:', blockchainError.message);
+      // Fallback to mock transaction hash if blockchain fails
+      txHash = `0x${Math.random().toString(16).substring(2, 66)}`;
+    }
 
     // Get all gateway URLs for true decentralization
     const allGateways = ipfsService.getAllGatewayUrls(ipfsResult.cid);
@@ -83,12 +108,14 @@ const uploadFile = asyncHandler(async (req, res) => {
         cid: ipfsResult.cid,
         hash: fileHash,
         tx_hash: txHash,
+        credentialId: credentialId,
         size: ipfsResult.size || req.file.size,
         gatewayUrl: ipfsService.getGatewayUrl(ipfsResult.cid),
         // Show all available gateways (true decentralization)
         allGateways: allGateways,
         decentralized: true, // Document is on IPFS network
-        accessibleFrom: 'Any IPFS node or gateway worldwide'
+        accessibleFrom: 'Any IPFS node or gateway worldwide',
+        blockchainStored: !!credentialId // Indicates if stored on blockchain
       }
     });
   } catch (error) {

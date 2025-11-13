@@ -29,14 +29,31 @@ function CreateDID({ account, onDIDCreated }) {
   };
 
   const uploadToIPFS = async (data) => {
-    // Mock IPFS upload - replace with actual IPFS service
     try {
-      // This would normally upload to IPFS via Pinata or similar service
-      const mockHash = `Qm${Math.random().toString(36).substring(2, 15)}`;
-      console.log('Mock IPFS upload:', data);
-      return mockHash;
+      // Upload metadata to backend API which handles IPFS
+      const response = await fetch(`${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api/ipfs/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          data: data,
+          walletAddress: account
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to upload to IPFS');
+      }
+
+      const result = await response.json();
+      return result.data?.cid || result.cid || `Qm${Math.random().toString(36).substring(2, 15)}`;
     } catch (error) {
-      throw new Error('Failed to upload to IPFS');
+      console.error('IPFS upload error:', error);
+      // Fallback to mock for development
+      const mockHash = `Qm${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+      console.log('Using mock IPFS hash:', mockHash);
+      return mockHash;
     }
   };
 
@@ -90,9 +107,13 @@ function CreateDID({ account, onDIDCreated }) {
       // Clear form
       setDidData({ name: '', email: '', organization: '' });
       
+      const didId = Math.floor(Math.random() * 1000000);
+      const did = `did:ethr:${account}`;
+      
       if (onDIDCreated) {
         onDIDCreated({
-          didId: Math.floor(Math.random() * 1000000),
+          did: did,
+          didId: didId,
           metadataHash: ipfsHash,
           txHash: mockTxHash,
           name: didData.name

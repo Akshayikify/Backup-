@@ -1,13 +1,17 @@
 import { useState, useEffect, useRef } from 'react';
 import { ethers } from 'ethers';
 import toast from 'react-hot-toast';
+import { backendApi } from '../utils/api';
+import { ipfsUtils } from '../utils/ipfs';
+import { contractFunctions, getProvider } from '../utils/contract';
 import { 
   CheckCircleIcon, 
   XCircleIcon, 
   MagnifyingGlassIcon,
   DocumentIcon,
   CalendarIcon,
-  UserIcon
+  UserIcon,
+  LinkIcon
 } from '@heroicons/react/24/outline';
 
 function VerifyForm({ ipfsHash: initialIpfsHash = '', txHash: initialTxHash = '', onVerificationComplete }) {
@@ -40,57 +44,229 @@ function VerifyForm({ ipfsHash: initialIpfsHash = '', txHash: initialTxHash = ''
 
   const verifyFromIPFS = async (ipfsHash) => {
     try {
-      // Mock IPFS retrieval - replace with actual IPFS service
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      toast.loading('Retrieving document from IPFS...', { id: 'ipfs' });
       
-      // Simulate IPFS data retrieval
-      const mockMetadata = {
-        title: "Bachelor's Degree in Computer Science",
-        description: "Degree certificate from University of Technology",
-        category: "diploma",
-        fileName: "degree_certificate.pdf",
-        fileSize: 2048576,
-        fileType: "application/pdf",
-        owner: "0x1234567890123456789012345678901234567890",
-        createdAt: "2024-01-15T10:30:00.000Z",
-        version: "1.0"
-      };
+      // Validate IPFS hash format
+      if (!ipfsUtils.isValidIPFSHash(ipfsHash)) {
+        throw new Error('Invalid IPFS hash format. IPFS hash should start with "Qm" followed by 44 characters, or "b" followed by 58 characters for CIDv1.');
+      }
       
-      return mockMetadata;
+      // Check if this is a mock hash (development/testing)
+      // Mock hashes are shorter and won't work on real IPFS gateways
+      if (ipfsHash.length < 46) {
+        throw new Error('This appears to be a mock/test IPFS hash. Real IPFS hashes are 46 characters long (CIDv0) or 59 characters (CIDv1). Please use a real IPFS hash from an actual upload.');
+      }
+
+      // Try to get file info from Pinata first (if configured)
+      try {
+        const fileInfo = await ipfsUtils.getFileInfo(ipfsHash);
+        
+        if (fileInfo.success) {
+          // File exists on Pinata
+          const metadata = fileInfo.metadata || {};
+          return {
+            title: metadata.name || 'Document',
+            description: metadata.description || '',
+            category: metadata.category || 'document',
+            fileName: metadata.fileName || ipfsHash,
+            fileSize: fileInfo.size || 0,
+            fileType: metadata.fileType || 'application/octet-stream',
+            owner: metadata.uploadedBy || metadata.owner || 'Unknown',
+            createdAt: fileInfo.timestamp || new Date().toISOString(),
+            version: metadata.version || '1.0',
+            ipfsHash: ipfsHash,
+            ipfsUrl: ipfsUtils.getIPFSUrl(ipfsHash)
+          };
+        }
+      } catch (pinataError) {
+        console.log('Pinata file info not available, trying other methods...');
+      }
+
+      // Try to fetch metadata JSON from IPFS
+      try {
+        const jsonResult = await ipfsUtils.getJSON(ipfsHash);
+        if (jsonResult.success && jsonResult.data) {
+          return {
+            ...jsonResult.data,
+            ipfsHash: ipfsHash,
+            ipfsUrl: jsonResult.url
+          };
+        }
+      } catch (jsonError) {
+        console.log('No JSON metadata found, trying to fetch file directly');
+      }
+
+      // Try to fetch file directly to verify it exists
+      try {
+        const fileResult = await ipfsUtils.getFile(ipfsHash);
+        if (fileResult.success) {
+          return {
+            title: 'Document',
+            description: 'Document retrieved from IPFS',
+            category: 'document',
+            fileName: ipfsHash,
+            fileSize: fileResult.data.size || 0,
+            fileType: fileResult.contentType || 'application/octet-stream',
+            owner: 'Unknown',
+            createdAt: new Date().toISOString(),
+            version: '1.0',
+            ipfsHash: ipfsHash,
+            ipfsUrl: fileResult.url
+          };
+        }
+      } catch (fileError) {
+        console.error('Error fetching file from IPFS gateways:', fileError);
+        // If all gateways fail, provide helpful error message
+        if (fileError.message && fileError.message.includes('Failed to retrieve')) {
+          throw new Error(`Content not found on IPFS. The hash "${ipfsHash}" may not be pinned or the content may not be available on IPFS gateways. This could be a mock/test hash.`);
+        }
+        throw fileError;
+      }
+
+      // If all methods fail, check backend API
+      try {
+        const backendUrl = backendApi.getBaseUrl();
+        const response = await fetch(`${backendUrl}/api/ipfs/${ipfsHash}`);
+        if (response.ok) {
+          const data = await response.json();
+          return {
+            title: data.title || 'Document',
+            description: data.description || '',
+            category: data.category || 'document',
+            fileName: data.fileName || ipfsHash,
+            fileSize: data.fileSize || 0,
+            fileType: data.fileType || 'application/octet-stream',
+            owner: data.owner || 'Unknown',
+            createdAt: data.createdAt || new Date().toISOString(),
+            version: data.version || '1.0',
+            ipfsHash: ipfsHash,
+            ipfsUrl: data.ipfsUrl || ipfsUtils.getIPFSUrl(ipfsHash)
+          };
+        }
+      } catch (apiError) {
+        console.error('Backend API error:', apiError);
+      }
+
+      // If all methods fail, provide detailed error
+      const errorMessage = `Document not found on IPFS. 
+      
+Possible reasons:
+• The IPFS hash may be invalid or not pinned
+• The content may not be available on IPFS gateways yet
+• This might be a mock/test hash (not a real IPFS upload)
+• The IPFS network may be experiencing issues
+
+Try:
+• Verify the IPFS hash is correct (46 chars for CIDv0, 59 for CIDv1)
+• Check if the document was actually uploaded to IPFS
+• Wait a few minutes and try again (IPFS propagation can take time)
+• Use a different IPFS gateway`;
+
+      throw new Error(errorMessage);
     } catch (error) {
-      throw new Error('Failed to retrieve document from IPFS');
+      console.error('IPFS verification error:', error);
+      // Preserve the detailed error message if it's already formatted
+      if (error.message && error.message.includes('Possible reasons:')) {
+        throw error;
+      }
+      throw new Error(`Failed to retrieve document from IPFS: ${error.message}`);
     }
   };
 
   const verifyOnBlockchain = async (txHash) => {
     try {
-      // Mock blockchain verification - replace with actual contract interaction
-      // Check if MetaMask is available (optional for verification)
-      if (window.ethereum) {
-        const provider = new ethers.providers.Web3Provider(window.ethereum);
-        // In a real implementation, you would use the provider to fetch transaction data
-        // const tx = await provider.getTransaction(txHash);
-        // const receipt = await provider.getTransactionReceipt(txHash);
+      toast.loading('Verifying transaction on blockchain...', { id: 'blockchain' });
+      
+      // Validate transaction hash format
+      if (!txHash.startsWith('0x') || txHash.length !== 66) {
+        throw new Error('Invalid transaction hash format');
       }
+
+      let provider;
       
-      // Simulate blockchain verification
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Try to use MetaMask provider if available
+      if (window.ethereum) {
+        provider = new ethers.providers.Web3Provider(window.ethereum);
+      } else {
+        // Fallback to public RPC endpoint (Sepolia testnet)
+        provider = new ethers.providers.JsonRpcProvider('https://sepolia.infura.io/v3/YOUR_INFURA_KEY');
+      }
+
+      // Get transaction details
+      const tx = await provider.getTransaction(txHash);
+      if (!tx) {
+        throw new Error('Transaction not found on blockchain');
+      }
+
+      // Get transaction receipt
+      const receipt = await provider.getTransactionReceipt(txHash);
+      if (!receipt) {
+        throw new Error('Transaction receipt not found');
+      }
+
+      // Get block details for timestamp
+      const block = await provider.getBlock(receipt.blockNumber);
       
-      // Mock transaction data
-      const mockTxData = {
+      // Verify transaction status
+      const status = receipt.status === 1 ? 'Success' : 'Failed';
+      
+      if (receipt.status !== 1) {
+        throw new Error('Transaction failed on blockchain');
+      }
+
+      // Try to get document details from contract if available
+      let documentData = null;
+      try {
+        // Check if transaction is to our contract
+        // You can add contract address check here
+        // const contractAddress = 'YOUR_CONTRACT_ADDRESS';
+        // if (receipt.to && receipt.to.toLowerCase() === contractAddress.toLowerCase()) {
+        //   // Parse logs to get document ID
+        //   // Then fetch document from contract
+        // }
+      } catch (contractError) {
+        console.log('Could not fetch contract data:', contractError);
+      }
+
+      return {
         hash: txHash,
-        blockNumber: 18234567,
-        timestamp: 1705312200,
-        from: "0x1234567890123456789012345678901234567890",
-        to: "0x9876543210987654321098765432109876543210",
-        status: 1, // Success
-        gasUsed: "45000"
+        blockNumber: receipt.blockNumber,
+        timestamp: block.timestamp,
+        from: tx.from,
+        to: receipt.to || tx.to,
+        status: receipt.status,
+        statusText: status,
+        gasUsed: receipt.gasUsed.toString(),
+        confirmations: receipt.confirmations,
+        documentData: documentData
       };
-      
-      return mockTxData;
     } catch (error) {
       console.error('Blockchain verification error:', error);
-      throw new Error('Failed to verify transaction on blockchain: ' + error.message);
+      
+      // Try alternative verification via backend API
+      try {
+        const backendUrl = backendApi.getBaseUrl();
+        const response = await fetch(`${backendUrl}/api/verify/tx/${txHash}`);
+        if (response.ok) {
+          const data = await response.json();
+          return {
+            hash: txHash,
+            blockNumber: data.blockNumber || 0,
+            timestamp: data.timestamp || Math.floor(Date.now() / 1000),
+            from: data.from || 'Unknown',
+            to: data.to || 'Unknown',
+            status: data.status || 1,
+            statusText: data.status === 1 ? 'Success' : 'Failed',
+            gasUsed: data.gasUsed || '0',
+            confirmations: data.confirmations || 0,
+            documentData: data.documentData || null
+          };
+        }
+      } catch (apiError) {
+        console.error('Backend API verification error:', apiError);
+      }
+      
+      throw new Error(`Failed to verify transaction on blockchain: ${error.message}`);
     }
   };
 
@@ -110,17 +286,37 @@ function VerifyForm({ ipfsHash: initialIpfsHash = '', txHash: initialTxHash = ''
       // Verify IPFS hash if provided
       if (verificationData.ipfsHash) {
         toast.loading('Retrieving document from IPFS...', { id: 'verify' });
-        metadata = await verifyFromIPFS(verificationData.ipfsHash);
+        try {
+          metadata = await verifyFromIPFS(verificationData.ipfsHash);
+          toast.success('Document retrieved from IPFS', { id: 'ipfs' });
+        } catch (ipfsError) {
+          console.error('IPFS verification failed:', ipfsError);
+          toast.error(`IPFS verification failed: ${ipfsError.message}`, { id: 'ipfs' });
+        }
       }
       
       // Verify blockchain transaction if provided
       if (verificationData.txHash) {
         toast.loading('Verifying on blockchain...', { id: 'verify' });
-        blockchainData = await verifyOnBlockchain(verificationData.txHash);
+        try {
+          blockchainData = await verifyOnBlockchain(verificationData.txHash);
+          toast.success('Transaction verified on blockchain', { id: 'blockchain' });
+        } catch (blockchainError) {
+          console.error('Blockchain verification failed:', blockchainError);
+          toast.error(`Blockchain verification failed: ${blockchainError.message}`, { id: 'blockchain' });
+        }
+      }
+      
+      // Cross-verify: If both IPFS and transaction hash are provided, verify they match
+      if (metadata && blockchainData && blockchainData.documentData) {
+        const blockchainIpfsHash = blockchainData.documentData.ipfsHash;
+        if (blockchainIpfsHash && blockchainIpfsHash !== verificationData.ipfsHash) {
+          throw new Error('IPFS hash mismatch: Document hash on blockchain does not match provided IPFS hash');
+        }
       }
       
       // Determine verification status
-      const isValid = metadata || blockchainData;
+      const isValid = (metadata && metadata.ipfsHash) || (blockchainData && blockchainData.status === 1);
       const verificationStatus = {
         isValid,
         metadata,
@@ -277,7 +473,16 @@ function VerifyForm({ ipfsHash: initialIpfsHash = '', txHash: initialTxHash = ''
 
           {verificationResult.error && (
             <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-              <p className="text-red-800 text-sm">{verificationResult.error}</p>
+              <p className="text-red-800 text-sm whitespace-pre-line">{verificationResult.error}</p>
+              <div className="mt-3 text-xs text-red-700">
+                <p className="font-medium mb-1">Troubleshooting:</p>
+                <ul className="list-disc list-inside space-y-1">
+                  <li>Ensure the IPFS hash is from a real upload (not a mock/test hash)</li>
+                  <li>Check that the document was successfully uploaded to IPFS</li>
+                  <li>Verify the hash format is correct</li>
+                  <li>Try accessing the document directly via IPFS gateways</li>
+                </ul>
+              </div>
             </div>
           )}
 
@@ -349,8 +554,33 @@ function VerifyForm({ ipfsHash: initialIpfsHash = '', txHash: initialTxHash = ''
                 
                 <div className="flex items-center">
                   <span className="font-medium">Status:</span>
-                  <span className="ml-2 text-green-600 font-medium">Confirmed</span>
+                  <span className={`ml-2 font-medium ${
+                    verificationResult.blockchainData.status === 1 ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {verificationResult.blockchainData.statusText || 'Unknown'}
+                  </span>
                 </div>
+                
+                {verificationResult.blockchainData.confirmations > 0 && (
+                  <div className="flex items-center">
+                    <span className="font-medium">Confirmations:</span>
+                    <span className="ml-2">{verificationResult.blockchainData.confirmations}</span>
+                  </div>
+                )}
+                
+                {verificationResult.metadata?.ipfsUrl && (
+                  <div className="flex items-center mt-2">
+                    <LinkIcon className="h-4 w-4 text-blue-600 mr-2" />
+                    <a 
+                      href={verificationResult.metadata.ipfsUrl} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:text-blue-800 text-sm break-all"
+                    >
+                      View on IPFS
+                    </a>
+                  </div>
+                )}
               </div>
             </div>
           )}

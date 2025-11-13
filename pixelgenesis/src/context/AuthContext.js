@@ -1,4 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { ref, get } from 'firebase/database';
+import { auth, db } from '../config/firebase';
 
 const AuthContext = createContext();
 
@@ -11,23 +14,53 @@ export const useAuth = () => {
 };
 
 export const AuthProvider = ({ children }) => {
-  const [userRole, setUserRole] = useState(() => {
-    // Load role from localStorage on initialization
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return localStorage.getItem('userRole') || null;
-    }
-    return null;
-  });
-  const [walletAddress, setWalletAddress] = useState(() => {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      return localStorage.getItem('walletAddress') || '';
-    }
-    return '';
-  });
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [walletAddress, setWalletAddress] = useState('');
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  const login = (role, wallet = '') => {
+  // Listen to Firebase auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        setFirebaseUser(user);
+        
+        // Try to get user data from 'users' path first
+        const userRef = ref(db, `users/${user.uid}`);
+        const userSnapshot = await get(userRef);
+        
+        if (userSnapshot.exists()) {
+          const data = userSnapshot.val();
+          setUserRole('user');
+          setWalletAddress(data.walletAddress || '');
+          setUserData(data);
+        } else {
+          // Try verifiers path
+          const verifierRef = ref(db, `verifiers/${user.uid}`);
+          const verifierSnapshot = await get(verifierRef);
+          if (verifierSnapshot.exists()) {
+            const data = verifierSnapshot.val();
+            setUserRole('verifier');
+            setUserData(data);
+          }
+        }
+      } else {
+        setFirebaseUser(null);
+        setUserRole(null);
+        setWalletAddress('');
+        setUserData(null);
+      }
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const login = (role, wallet = '', additionalData = {}) => {
     setUserRole(role);
     setWalletAddress(wallet);
+    setUserData(additionalData);
     if (typeof window !== 'undefined' && window.localStorage) {
       localStorage.setItem('userRole', role);
       if (wallet) {
@@ -36,12 +69,19 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
-    setUserRole(null);
-    setWalletAddress('');
-    if (typeof window !== 'undefined' && window.localStorage) {
-      localStorage.removeItem('userRole');
-      localStorage.removeItem('walletAddress');
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      setUserRole(null);
+      setWalletAddress('');
+      setUserData(null);
+      setFirebaseUser(null);
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.removeItem('userRole');
+        localStorage.removeItem('walletAddress');
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
     }
   };
 
@@ -57,12 +97,16 @@ export const AuthProvider = ({ children }) => {
   };
 
   const value = {
+    firebaseUser,
     userRole,
     walletAddress,
+    userData,
+    loading,
     login,
     logout,
     updateWallet,
-    isAuthenticated: !!userRole,
+    setFirebaseUser,
+    isAuthenticated: !!firebaseUser && !!userRole,
     isUser: userRole === 'user',
     isVerifier: userRole === 'verifier'
   };

@@ -80,17 +80,18 @@ export const ipfsUtils = {
 
   // Upload JSON data to IPFS
   async uploadJSON(data, metadata = {}) {
+    let file;
     try {
       const jsonString = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonString], { type: 'application/json' });
-      const file = new File([blob], metadata.name || 'data.json', { type: 'application/json' });
+      file = new File([blob], metadata.name || 'data.json', { type: 'application/json' });
       
       return await this.uploadFile(file, metadata);
     } catch (error) {
       console.error('Error uploading JSON to IPFS:', error);
       
       // Fallback to mock upload for development
-      if (process.env.NODE_ENV === 'development') {
+      if (process.env.NODE_ENV === 'development' && file) {
         return this.mockUpload(file, metadata);
       }
       

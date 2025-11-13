@@ -24,9 +24,25 @@ class IPFSService {
    */
   async uploadFile(fileBuffer, metadata = {}) {
     try {
-      // Option 1: Use local IPFS node (truly decentralized)
+      // Option 1: Use Pinata (preferred - reliable and accessible)
+      if (this.pinataApiKey && this.pinataSecretKey) {
+        try {
+          console.log('📤 Uploading to Pinata IPFS...');
+          const result = await this.uploadToPinata(fileBuffer, metadata);
+          console.log('✅ Successfully uploaded to Pinata:', result.cid);
+          return result;
+        } catch (pinataError) {
+          console.error('❌ Pinata upload failed:', pinataError.message);
+          // Continue to try other options
+        }
+      } else {
+        console.warn('⚠️  Pinata API keys not configured. Please set PINATA_API_KEY and PINATA_SECRET_KEY in .env file');
+      }
+
+      // Option 2: Use local IPFS node (truly decentralized)
       if (this.useLocalIPFS && this.client && typeof this.client.add === 'function') {
         try {
+          console.log('📤 Uploading to local IPFS node...');
           const result = await this.client.add(fileBuffer, {
             pin: true, // Pin to local node to prevent garbage collection
             ...metadata
@@ -48,26 +64,16 @@ class IPFSService {
             size: result.size || fileBuffer.length
           };
         } catch (localError) {
-          console.warn('⚠️  Local IPFS upload failed, falling back to Pinata:', localError.message);
+          console.warn('⚠️  Local IPFS upload failed:', localError.message);
         }
       }
 
-      // Option 2: Use Pinata (centralized but reliable)
-      if (this.pinataApiKey && this.pinataSecretKey) {
-        return await this.uploadToPinata(fileBuffer, metadata);
-      }
-
-      // Option 3: Fallback to mock (development only)
-      const result = await this.client.add(fileBuffer, {
-        pin: true,
-        ...metadata
-      });
-
-      return {
-        cid: result.cid?.toString() || result.path,
-        path: result.path,
-        size: result.size || fileBuffer.length
-      };
+      // Option 3: Fallback - throw error instead of using mock
+      throw new Error(
+        'IPFS upload failed. Please configure Pinata API keys (PINATA_API_KEY and PINATA_SECRET_KEY) in your .env file, ' +
+        'or set up a local IPFS node (USE_LOCAL_IPFS=true). ' +
+        'Get Pinata keys from: https://pinata.cloud'
+      );
     } catch (error) {
       console.error('IPFS upload error:', error);
       throw new Error(`Failed to upload to IPFS: ${error.message}`);
