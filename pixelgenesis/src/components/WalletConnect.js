@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { ethers } from 'ethers';
+import { useState, useEffect, useCallback } from 'react';
 import toast from 'react-hot-toast';
 
 function WalletConnect({ onWalletConnected }) {
@@ -10,15 +9,43 @@ function WalletConnect({ onWalletConnected }) {
     checkIfWalletIsConnected();
   }, []);
 
+  const handleAccountChange = useCallback(
+    (accounts) => {
+      const nextAccount = accounts && accounts.length > 0 ? accounts[0] : '';
+      setAccount(nextAccount);
+      if (onWalletConnected) {
+        onWalletConnected(nextAccount);
+      }
+      if (!nextAccount) {
+        toast.success('Wallet disconnected');
+      }
+    },
+    [onWalletConnected]
+  );
+
+  const handleDisconnect = useCallback(() => {
+    handleAccountChange([]);
+  }, [handleAccountChange]);
+
+  useEffect(() => {
+    if (!window.ethereum) return;
+
+    window.ethereum.on('accountsChanged', handleAccountChange);
+    window.ethereum.on('disconnect', handleDisconnect);
+
+    return () => {
+      if (!window.ethereum.removeListener) return;
+      window.ethereum.removeListener('accountsChanged', handleAccountChange);
+      window.ethereum.removeListener('disconnect', handleDisconnect);
+    };
+  }, [handleAccountChange, handleDisconnect]);
+
   const checkIfWalletIsConnected = async () => {
     try {
       if (window.ethereum) {
         const accounts = await window.ethereum.request({ method: 'eth_accounts' });
         if (accounts.length > 0) {
-          setAccount(accounts[0]);
-          if (onWalletConnected) {
-            onWalletConnected(accounts[0]);
-          }
+          handleAccountChange(accounts);
         }
       }
     } catch (error) {
@@ -38,12 +65,8 @@ function WalletConnect({ onWalletConnected }) {
         method: 'eth_requestAccounts'
       });
       
-      setAccount(accounts[0]);
+      handleAccountChange(accounts);
       toast.success('Wallet connected successfully!');
-      
-      if (onWalletConnected) {
-        onWalletConnected(accounts[0]);
-      }
     } catch (error) {
       console.error('Error connecting wallet:', error);
       toast.error('Failed to connect wallet. Please try again.');
@@ -52,11 +75,25 @@ function WalletConnect({ onWalletConnected }) {
     }
   };
 
-  const disconnectWallet = () => {
+  const disconnectWallet = async () => {
     setAccount('');
-    toast.success('Wallet disconnected');
-    if (onWalletConnected) {
-      onWalletConnected('');
+    try {
+      if (window.ethereum?.request) {
+        await window.ethereum.request({
+          method: 'wallet_revokePermissions',
+          params: [{ eth_accounts: {} }]
+        });
+      }
+      toast.success('Wallet disconnected');
+    } catch (error) {
+      console.warn('Wallet revoke permissions not supported or failed:', error);
+      toast('Disconnect requested. If the wallet remains connected, please disconnect from MetaMask directly.', {
+        icon: '⚠️'
+      });
+    } finally {
+      if (onWalletConnected) {
+        onWalletConnected('');
+      }
     }
   };
 

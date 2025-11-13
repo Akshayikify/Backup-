@@ -115,13 +115,20 @@ function MyDocs() {
   const loadUserDocuments = async () => {
     setIsLoading(true);
     try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // In a real app, this would fetch from the blockchain
-      setDocuments(mockDocuments);
+      // Load from localStorage first
+      const savedDocs = localStorage.getItem(`documents_${connectedAccount}`);
+      if (savedDocs) {
+        const parsedDocs = JSON.parse(savedDocs);
+        setDocuments(parsedDocs);
+      } else {
+        // Fallback to mock data if no saved documents
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        setDocuments(mockDocuments);
+      }
     } catch (error) {
       console.error('Error loading documents:', error);
+      // Fallback to mock data on error
+      setDocuments(mockDocuments);
     } finally {
       setIsLoading(false);
     }

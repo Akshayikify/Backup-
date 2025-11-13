@@ -19,6 +19,14 @@ function Upload() {
 
   const handleFileUploaded = (fileData) => {
     setUploadedFiles(prev => [fileData, ...prev]);
+    
+    // Save to localStorage for the user dashboard
+    if (connectedAccount) {
+      const savedDocs = localStorage.getItem(`documents_${connectedAccount}`);
+      const existingDocs = savedDocs ? JSON.parse(savedDocs) : [];
+      const updatedDocs = [fileData, ...existingDocs];
+      localStorage.setItem(`documents_${connectedAccount}`, JSON.stringify(updatedDocs));
+    }
   };
 
   const goBack = () => {
@@ -212,9 +220,18 @@ function Upload() {
                   </div>
                   
                   <div className="mt-3 pt-3 border-t border-gray-200">
-                    <p className="text-xs text-gray-500 font-mono break-all">
-                      IPFS: {file.ipfsHash}
+                    <p className="text-xs text-gray-500 mb-1">Unique CID:</p>
+                    <p className="text-xs text-gray-700 font-mono break-all">
+                      {file.cid || file.ipfsHash}
                     </p>
+                    {file.ipfsHash && file.ipfsHash !== file.cid && (
+                      <>
+                        <p className="text-xs text-gray-500 mb-1 mt-2">IPFS Hash:</p>
+                        <p className="text-xs text-gray-700 font-mono break-all">
+                          {file.ipfsHash}
+                        </p>
+                      </>
+                    )}
                   </div>
                   
                   <div className="mt-3 flex space-x-2">

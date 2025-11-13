@@ -1,7 +1,11 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from './context/AuthContext';
 import Home from './pages/Home';
+import Login from './components/Login';
 import Dashboard from './pages/Dashboard';
+import UserDashboard from './pages/UserDashboard';
+import VerifierDashboard from './pages/VerifierDashboard';
 import Upload from './pages/Upload';
 import MyDocs from './pages/MyDocs';
 import Verify from './pages/Verify';
@@ -9,15 +13,19 @@ import './App.css';
 
 function App() {
   return (
-    <BrowserRouter>
-      <div className="App">
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/upload" element={<Upload />} />
-          <Route path="/my-docs" element={<MyDocs />} />
-          <Route path="/verify" element={<Verify />} />
-        </Routes>
+    <AuthProvider>
+      <BrowserRouter>
+        <div className="App">
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/user-dashboard" element={<UserDashboard />} />
+            <Route path="/verifier-dashboard" element={<VerifierDashboard />} />
+            <Route path="/upload" element={<Upload />} />
+            <Route path="/my-docs" element={<MyDocs />} />
+            <Route path="/verify" element={<Verify />} />
+          </Routes>
         <Toaster 
           position="top-right"
           toastOptions={{
@@ -42,8 +50,9 @@ function App() {
             },
           }}
         />
-      </div>
-    </BrowserRouter>
+        </div>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
 

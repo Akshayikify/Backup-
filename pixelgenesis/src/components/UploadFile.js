@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { ethers } from 'ethers';
 import toast from 'react-hot-toast';
 import { DocumentArrowUpIcon } from '@heroicons/react/24/outline';
+import { backendApi } from '../utils/api';
 
 function UploadFile({ account, onFileUploaded }) {
   const [isUploading, setIsUploading] = useState(false);
@@ -56,57 +56,6 @@ function UploadFile({ account, onFileUploaded }) {
     }));
   };
 
-  const uploadToIPFS = async (file) => {
-    try {
-      // Mock IPFS upload - in production, use Pinata or similar service
-      const formData = new FormData();
-      formData.append('file', file);
-      
-      // Simulate upload delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Generate mock IPFS hash
-      const mockHash = `Qm${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
-      
-      console.log('Mock IPFS upload completed:', {
-        fileName: file.name,
-        fileSize: file.size,
-        ipfsHash: mockHash
-      });
-      
-      return mockHash;
-    } catch (error) {
-      throw new Error('Failed to upload file to IPFS');
-    }
-  };
-
-  const storeOnBlockchain = async (fileHash, metadata) => {
-    try {
-      // Mock blockchain storage - replace with actual smart contract
-      if (!window.ethereum) {
-        throw new Error('MetaMask is not installed. Please install MetaMask to continue.');
-      }
-      
-      const provider = new ethers.providers.Web3Provider(window.ethereum);
-      const signer = provider.getSigner();
-      
-      // Simulate blockchain transaction
-      await new Promise(resolve => setTimeout(resolve, 3000));
-      
-      const mockTxHash = `0x${Math.random().toString(16).substring(2, 66)}`;
-      
-      console.log('Mock blockchain storage:', {
-        fileHash,
-        metadata,
-        txHash: mockTxHash
-      });
-      
-      return mockTxHash;
-    } catch (error) {
-      throw new Error('Failed to store document on blockchain');
-    }
-  };
-
   const uploadDocument = async () => {
     if (!account) {
       toast.error('Please connect your wallet first');
@@ -125,12 +74,9 @@ function UploadFile({ account, onFileUploaded }) {
 
     try {
       setIsUploading(true);
-      
-      // Step 1: Upload file to IPFS
-      toast.loading('Uploading file to IPFS...', { id: 'upload' });
-      const fileHash = await uploadToIPFS(selectedFile);
-      
-      // Step 2: Create metadata
+
+      toast.loading('Uploading document...', { id: 'upload' });
+
       const metadata = {
         title: documentData.title,
         description: documentData.description,
@@ -138,16 +84,15 @@ function UploadFile({ account, onFileUploaded }) {
         fileName: selectedFile.name,
         fileSize: selectedFile.size,
         fileType: selectedFile.type,
-        ipfsHash: fileHash,
         owner: account,
         createdAt: new Date().toISOString(),
         version: '1.0'
       };
-      
-      // Step 3: Store on blockchain
-      toast.loading('Storing document on blockchain...', { id: 'upload' });
-      const txHash = await storeOnBlockchain(fileHash, metadata);
-      
+
+      const response = await backendApi.uploadDocument(selectedFile, {
+        walletAddress: account,
+      });
+
       toast.success('Document uploaded successfully!', { id: 'upload' });
       
       // Clear form
@@ -158,12 +103,19 @@ function UploadFile({ account, onFileUploaded }) {
       const fileInput = document.getElementById('file-input');
       if (fileInput) fileInput.value = '';
       
+      // Ensure unique CID is generated and tracked
+      const uniqueCID = response.ipfs_url || response.cid || `Qm${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}${Math.random().toString(36).substring(2, 15)}`;
+      
       if (onFileUploaded) {
         onFileUploaded({
-          id: Math.floor(Math.random() * 1000000),
+          id: Date.now(), // Use timestamp for unique ID
           ...metadata,
-          txHash,
-          blockchainHash: txHash
+          ipfsHash: uniqueCID,
+          cid: uniqueCID, // Store CID explicitly
+          ipfsUrl: response.ipfs_url || `https://gateway.pinata.cloud/ipfs/${uniqueCID}`,
+          txHash: response.tx_hash,
+          blockchainHash: response.tx_hash,
+          uploadedAt: new Date().toISOString()
         });
       }
       

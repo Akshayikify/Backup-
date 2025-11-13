@@ -15,13 +15,14 @@ function Verify() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if URL has hash or tx parameters (from shared links)
-    const ipfsHash = searchParams.get('hash');
+    // Check if URL has cid, hash, or tx parameters (from shared links/QR codes)
+    const cid = searchParams.get('cid');
+    const ipfsHash = searchParams.get('hash') || cid; // Support both 'hash' and 'cid' parameters
     const txHash = searchParams.get('tx');
     
     if (ipfsHash || txHash) {
       // Pre-fill the verification form with URL parameters
-      console.log('Verification parameters from URL:', { ipfsHash, txHash });
+      console.log('Verification parameters from URL:', { cid, ipfsHash, txHash });
     }
   }, [searchParams]);
 
@@ -51,12 +52,12 @@ function Verify() {
             </div>
             <div className="flex items-center space-x-4">
               <button
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate('/')}
                 className="text-gray-600 hover:text-gray-900 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                Dashboard
+                Home
               </button>
-              <WalletConnect onWalletConnected={handleWalletConnected} />
+              {/* Wallet connection is optional for verification */}
             </div>
           </div>
         </div>
@@ -77,7 +78,7 @@ function Verify() {
           {/* Verification Form */}
           <div className="lg:col-span-2">
             <VerifyForm 
-              ipfsHash={searchParams.get('hash') || ''}
+              ipfsHash={searchParams.get('hash') || searchParams.get('cid') || ''}
               txHash={searchParams.get('tx') || ''}
             />
           </div>

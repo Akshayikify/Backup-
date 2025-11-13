@@ -1,6 +1,4 @@
-import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import WalletConnect from '../components/WalletConnect';
 import { 
   ShieldCheckIcon, 
   DocumentIcon, 
@@ -10,15 +8,7 @@ import {
 } from '@heroicons/react/24/outline';
 
 function Home() {
-  const [connectedAccount, setConnectedAccount] = useState('');
   const navigate = useNavigate();
-
-  const handleWalletConnected = (account) => {
-    setConnectedAccount(account);
-    if (account) {
-      navigate('/dashboard');
-    }
-  };
 
   const features = [
     {
@@ -53,7 +43,6 @@ function Home() {
               <ShieldCheckIcon className="h-8 w-8 text-blue-600 mr-3" />
               <h1 className="text-2xl font-bold text-gray-900">PixelGenesis</h1>
             </div>
-            <WalletConnect onWalletConnected={handleWalletConnected} />
           </div>
         </div>
       </header>
@@ -70,25 +59,13 @@ function Home() {
             on the blockchain. The future of document verification is here.
           </p>
           
-          {!connectedAccount ? (
-            <div className="bg-white rounded-lg shadow-lg p-8 max-w-md mx-auto">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">
-                Get Started
-              </h3>
-              <p className="text-gray-600 mb-6">
-                Connect your MetaMask wallet to begin using the platform
-              </p>
-              <WalletConnect onWalletConnected={handleWalletConnected} />
-            </div>
-          ) : (
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg text-lg font-medium transition-colors flex items-center mx-auto"
-            >
-              Go to Dashboard
-              <ArrowRightIcon className="h-5 w-5 ml-2" />
-            </button>
-          )}
+          <button
+            onClick={() => navigate('/login')}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-4 rounded-lg text-lg font-medium transition-colors flex items-center mx-auto"
+          >
+            Get Started
+            <ArrowRightIcon className="h-5 w-5 ml-2" />
+          </button>
         </div>
 
         {/* Features Grid */}

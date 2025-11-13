@@ -58,7 +58,20 @@ function CredentialCard({ credential, onView, onShare }) {
     }
   };
 
-  const shareUrl = `${window.location.origin}/verify?hash=${credential.ipfsHash}&tx=${credential.txHash}`;
+  // Use public URL from environment or fallback to current origin
+  const getPublicUrl = () => {
+    // Check for public URL in environment variable
+    const publicUrl = process.env.REACT_APP_PUBLIC_URL || process.env.REACT_APP_FRONTEND_URL;
+    if (publicUrl) {
+      return publicUrl.replace(/\/$/, ''); // Remove trailing slash
+    }
+    // For production, use current origin
+    // For development, you should set REACT_APP_PUBLIC_URL to your deployed URL
+    return window.location.origin;
+  };
+
+  // Build shareable URL with CID and hash for global access
+  const shareUrl = `${getPublicUrl()}/verify?cid=${credential.cid || credential.ipfsHash}${credential.txHash ? `&tx=${credential.txHash}` : ''}`;
 
   return (
     <div className="bg-white rounded-lg shadow-md border border-gray-200 p-6 hover:shadow-lg transition-shadow">
@@ -117,15 +130,32 @@ function CredentialCard({ credential, onView, onShare }) {
 
       {/* Blockchain Info */}
       <div className="bg-gray-50 rounded-lg p-3 mb-4">
-        <div className="text-xs text-gray-500 mb-1">IPFS Hash:</div>
-        <div className="font-mono text-xs text-gray-700 break-all">
-          {credential.ipfsHash}
-        </div>
+        {(credential.cid || credential.ipfsHash) && (
+          <>
+            <div className="text-xs text-gray-500 mb-1">Unique CID:</div>
+            <div className="font-mono text-xs text-gray-700 break-all">
+              {credential.cid || credential.ipfsHash}
+            </div>
+          </>
+        )}
         
-        <div className="text-xs text-gray-500 mb-1 mt-2">Transaction Hash:</div>
-        <div className="font-mono text-xs text-gray-700 break-all">
-          {credential.txHash}
-        </div>
+        {credential.ipfsHash && credential.ipfsHash !== credential.cid && (
+          <>
+            <div className="text-xs text-gray-500 mb-1 mt-2">IPFS Hash:</div>
+            <div className="font-mono text-xs text-gray-700 break-all">
+              {credential.ipfsHash}
+            </div>
+          </>
+        )}
+        
+        {credential.txHash && (
+          <>
+            <div className="text-xs text-gray-500 mb-1 mt-2">Transaction Hash:</div>
+            <div className="font-mono text-xs text-gray-700 break-all">
+              {credential.txHash}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Verification Status */}
@@ -148,34 +178,52 @@ function CredentialCard({ credential, onView, onShare }) {
               <h3 className="text-lg font-semibold text-gray-800 mb-2">
                 Share Document
               </h3>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 mb-2">
                 Scan this QR code to verify the document
+              </p>
+              <p className="text-xs text-green-600 font-medium">
+                ✓ Globally accessible - Anyone can scan and verify
               </p>
             </div>
             
-            <div className="flex justify-center mb-4">
+            <div className="flex justify-center mb-4 bg-gray-50 p-4 rounded-lg">
               <QRCodeGenerator value={shareUrl} size={200} />
             </div>
             
             <div className="text-center mb-4">
-              <p className="text-xs text-gray-500 break-all">
+              <p className="text-xs text-gray-500 mb-2">Shareable URL:</p>
+              <p className="text-xs text-gray-700 break-all bg-gray-50 p-2 rounded">
                 {shareUrl}
               </p>
+              {shareUrl.includes('localhost') && (
+                <p className="text-xs text-yellow-600 mt-2">
+                  ⚠️ Using localhost. Set REACT_APP_PUBLIC_URL for production.
+                </p>
+              )}
             </div>
             
-            <div className="flex space-x-3">
+            <div className="flex flex-col space-y-2 mb-4">
               <button
-                onClick={() => navigator.clipboard.writeText(shareUrl)}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
+                onClick={() => {
+                  navigator.clipboard.writeText(shareUrl);
+                  alert('Link copied to clipboard!');
+                }}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
               >
                 Copy Link
               </button>
               <button
                 onClick={() => setShowQR(false)}
-                className="flex-1 bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
+                className="w-full bg-gray-500 hover:bg-gray-600 text-white py-2 px-4 rounded-lg text-sm font-medium transition-colors"
               >
                 Close
               </button>
+            </div>
+            
+            <div className="text-center">
+              <p className="text-xs text-gray-500">
+                This QR code can be scanned by anyone, anywhere in the world
+              </p>
             </div>
           </div>
         </div>

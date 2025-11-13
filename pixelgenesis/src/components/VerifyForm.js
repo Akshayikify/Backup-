@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ethers } from 'ethers';
 import toast from 'react-hot-toast';
 import { 
@@ -10,13 +10,15 @@ import {
   UserIcon
 } from '@heroicons/react/24/outline';
 
-function VerifyForm({ ipfsHash: initialIpfsHash = '', txHash: initialTxHash = '' }) {
+function VerifyForm({ ipfsHash: initialIpfsHash = '', txHash: initialTxHash = '', onVerificationComplete }) {
   const [verificationData, setVerificationData] = useState({
     ipfsHash: initialIpfsHash,
     txHash: initialTxHash
   });
+  
   const [isVerifying, setIsVerifying] = useState(false);
   const [verificationResult, setVerificationResult] = useState(null);
+  const hasAutoVerified = useRef(false);
 
   // Update state when props change (e.g., from URL parameters)
   useEffect(() => {
@@ -130,6 +132,15 @@ function VerifyForm({ ipfsHash: initialIpfsHash = '', txHash: initialTxHash = ''
       
       setVerificationResult(verificationStatus);
       
+      // Call callback if provided
+      if (onVerificationComplete) {
+        onVerificationComplete({
+          ...verificationStatus,
+          ipfsHash: verificationData.ipfsHash,
+          txHash: verificationData.txHash
+        });
+      }
+      
       if (isValid) {
         toast.success('Document verified successfully!', { id: 'verify' });
       } else {
@@ -148,6 +159,19 @@ function VerifyForm({ ipfsHash: initialIpfsHash = '', txHash: initialTxHash = ''
       setIsVerifying(false);
     }
   };
+
+  // Auto-verify when hash is provided from QR code/URL (after verifyDocument is defined)
+  useEffect(() => {
+    if (initialIpfsHash && !hasAutoVerified.current && verificationData.ipfsHash === initialIpfsHash) {
+      hasAutoVerified.current = true;
+      // Auto-verify after a short delay to ensure form is ready
+      const timer = setTimeout(() => {
+        verifyDocument();
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verificationData.ipfsHash, initialIpfsHash]);
 
   const clearForm = () => {
     setVerificationData({ ipfsHash: '', txHash: '' });
